@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CO2 Measurement</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            color: #00ff00;
+        }
+        h1 {
+            margin: 20px;
+            font-size: 2rem;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        canvas {
+            max-width: 90%;
+            height: 400px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,255,0,0.5);
+        }
+        #averageModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            color: #00ff00;
+            font-size: 1.5rem;
+            z-index: 1000;
+        }
+        #progressBarContainer {
+            width: 100%;
+            background-color: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        #progressBar {
+            width: 0%;
+            height: 25px;
+            background-color: #00ff00;
+            border-radius: 10px;
+            text-align: center;
+            line-height: 25px;
+            color: black;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live CO₂ Measurement</h1>
+    <canvas id="co2Chart"></canvas>
+
+    <div id="averageModal">
+        <div>Mesatarja e CO₂: <span id="averageValue">0</span> ppm</div>
+        <div id="progressBarContainer">
+            <div id="progressBar">0%</div>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('co2Chart').getContext('2d');
+        let labels = [];
+        let dataPoints = [];
+        let time = 0;
+        let measurementDuration = 20; // seconds
+        let intervalTime = 300; // ms per point
+        let totalPoints = Math.floor(measurementDuration * 1000 / intervalTime);
+
+        // Gradient for line
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(0,255,0,0.5)');
+        gradient.addColorStop(1, 'rgba(0,255,0,0)');
+
+        const co2Chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'CO₂ Levels',
+                    data: dataPoints,
+                    borderColor: '#00ff00',
+                    backgroundColor: gradient,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#00ff00',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: { duration: 250, easing: 'linear' },
+                scales: {
+                    x: { ticks: { color: '#00ff00' }, grid: { color: 'rgba(0,255,0,0.2)' } },
+                    y: { min: 0, max: 230, ticks: { color: '#00ff00' }, grid: { color: 'rgba(0,255,0,0.2)' } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#00ff00', font: { size: 16 } } }
+                }
+            }
+        });
+
+        // Lidhja e sensorit
+        let connected = true; // vendos false për "pa lidhje"
+
+        // Function to add CO2 points gradually
+        let lastValue = 0; // fillon nga 0
+        let pointsAdded = 0;
+        let co2Values = [];
+
+        // shtojmë pikën e parë 0
+        labels.push(time);
+        dataPoints.push(0);
+        co2Values.push(0);
+        co2Chart.update();
+        time++;
+        pointsAdded++;
+
+        const measurementInterval = setInterval(() => {
+            let newValue;
+            if (!connected) {
+                newValue = 0; // pa lidhje → 0
+            } else {
+                // Gradual change ±5
+                let change = Math.floor(Math.random() * 11) - 5;
+                newValue = lastValue + change;
+                if(newValue < 0) newValue = 0;
+                if(newValue > 230) newValue = 230;
+                lastValue = newValue;
+            }
+
+            // Add point
+            labels.push(time);
+            dataPoints.push(newValue);
+            co2Values.push(newValue);
+            time++;
+            pointsAdded++;
+
+            // Keep chart showing last 50 points
+            if(dataPoints.length > 50) {
+                dataPoints.shift();
+                labels.shift();
+            }
+
+            co2Chart.update();
+
+            // Stop after 20 seconds
+            if(pointsAdded >= totalPoints) {
+                clearInterval(measurementInterval);
+                showAverage();
+            }
+
+        }, intervalTime);
+
+        function showAverage() {
+            let sum = co2Values.reduce((a,b) => a+b, 0);
+            let avg = (sum / co2Values.length).toFixed(2);
+            document.getElementById('averageValue').innerText = avg;
+            document.getElementById('averageModal').style.display = 'block';
+            animateProgressBar();
+        }
+
+        function animateProgressBar() {
+            let bar = document.getElementById('progressBar');
+            let width = 0;
+            let loadingInterval = setInterval(() => {
+                if(width >= 100) {
+                    clearInterval(loadingInterval);
+                    bar.innerText = 'Done';
+                } else {
+                    width += 1;
+                    bar.style.width = width + '%';
+                    bar.innerText = width + '%';
+                }
+            }, 50); // animation speed (50ms per step → 5s total)
+        }
+    </script>
+</body>
+</html>
